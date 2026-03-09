@@ -1,0 +1,50 @@
+# DigBrain Configuration
+# 模型配置
+model:
+  name: "Qwen/Qwen2.5-0.5B-Instruct"
+  path: null
+  device: "auto"
+  precision: "fp16"
+  max_length: 4096
+
+# 记忆配置
+memory:
+  enabled: true
+  capacity: 10000
+  storage_backend: "sqlite"
+  storage_path: "./data/memory"
+  embedding_dim: 768
+  short_term_duration: 30.0
+  long_term_threshold: 3
+
+# STDP配置
+stdp:
+  enabled: true
+  learning_rate: 0.01
+  time_window: 20.0
+  tau_plus: 20.0
+  tau_minus: 20.0
+
+# 流处理配置
+stream:
+  refresh_rate: 30.0
+  chunk_size: 64
+  max_context_length: 4096
+
+# API配置
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "*"
+
+# Web配置
+web:
+  host: "0.0.0.0"
+  port: 3000
+
+# 工具配置
+tools:
+  enable_wiki: true
+  enable_web: true
+  wiki_language: "zh"
