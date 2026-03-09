@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-03-09T01:44:50.434103",
+  "model": "./models/qwen",
+  "benchmarks": {
+    "MMLU": {
+      "benchmark": "MMLU",
+      "accuracy": 0.24,
+      "correct": 6,
+      "total": 25,
+      "category_scores": {
+        "math": {
+          "correct": 1,
+          "total": 5
+        },
+        "physics": {
+          "correct": 2,
+          "total": 5
+        },
+        "biology": {
+          "correct": 1,
+          "total": 5
+        },
+        "history": {
+          "correct": 0,
+          "total": 5
+        },
+        "computer_science": {
+          "correct": 2,
+          "total": 5
+        }
+      }
+    },
+    "HellaSwag": {
+      "benchmark": "HellaSwag",
+      "accuracy": 1.0,
+      "correct": 10,
+      "total": 10
+    },
+    "WinoGrande": {
+      "benchmark": "WinoGrande",
+      "accuracy": 0.5,
+      "correct": 5,
+      "total": 10
+    },
+    "ARC": {
+      "benchmark": "ARC",
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 10
+    },
+    "GSM8K": {
+      "benchmark": "GSM8K",
+      "accuracy": 0.2,
+      "correct": 2,
+      "total": 10
+    },
+    "TruthfulQA": {
+      "benchmark": "TruthfulQA",
+      "accuracy": 0.0,
+      "correct": 0,
+      "total": 10
+    }
+  },
+  "total_time": 70.4635329246521,
+  "average_accuracy": 0.3233333333333333
+}

@@ -1,0 +1,62 @@
+{
+  "optimization": {
+    "timestamp": "2026-03-09T01:51:40.631097",
+    "results": [
+      {
+        "config": "default",
+        "store_time": 0.0011022090911865234,
+        "retrieve_time": 0.0003349781036376953,
+        "avg_relevance": 0.0,
+        "total_memories": 10,
+        "neural_growth": {
+          "semantic": 10
+        }
+      },
+      {
+        "config": "high_capacity",
+        "store_time": 0.0008976459503173828,
+        "retrieve_time": 0.00037479400634765625,
+        "avg_relevance": 0.0,
+        "total_memories": 10,
+        "neural_growth": {
+          "semantic": 10
+        }
+      },
+      {
+        "config": "fast_consolidation",
+        "store_time": 0.0008704662322998047,
+        "retrieve_time": 0.0003559589385986328,
+        "avg_relevance": 0.0,
+        "total_memories": 10,
+        "neural_growth": {
+          "semantic": 10
+        }
+      },
+      {
+        "config": "slow_forgetting",
+        "store_time": 0.0008344650268554688,
+        "retrieve_time": 0.0002999305725097656,
+        "avg_relevance": 0.0,
+        "total_memories": 10,
+        "neural_growth": {
+          "semantic": 10
+        }
+      }
+    ],
+    "best_config": "default"
+  },
+  "associations": {
+    "total_stored": 10,
+    "total_retrieved": 0,
+    "consolidated": 0,
+    "forgotten": 0,
+    "total_memories": 10,
+    "memory_types": {
+      "semantic": 10
+    },
+    "neural_growth": {
+      "semantic": 10
+    }
+  },
+  "timestamp": "2026-03-09T01:51:40.633621"
+}
