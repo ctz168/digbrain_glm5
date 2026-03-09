@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-DigBrain Telegram Bot Service - 优化版
-集成维基百科搜索和网页搜索（使用可靠API）
+DigBrain Telegram Bot - 流式输出版
+展示逐步生成的过程
 """
 
 import sys
 import os
 import asyncio
 import logging
-import re
 import json
-from typing import Optional, List
+import urllib.parse
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,19 +25,14 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = "8627479342:AAGb1YlpbEY3utp1aSA4pKs9ppg1t8PVDDY"
 
-# 管理员通知Chat ID（需要设置）
-ADMIN_CHAT_ID = None
-
 
 class WikipediaSearch:
-    """维基百科搜索 - 使用MediaWiki API"""
+    """维基百科搜索"""
     
     async def search(self, query: str) -> dict:
-        """搜索维基百科"""
         try:
             import urllib.request
             
-            # 使用MediaWiki API
             url = f"https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=1"
             
             req = urllib.request.Request(url, headers={'User-Agent': 'DigBrainBot/1.0'})
@@ -49,7 +43,6 @@ class WikipediaSearch:
                 result = data['query']['search'][0]
                 title = result['title']
                 
-                # 获取摘要
                 url2 = f"https://zh.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles={urllib.parse.quote(title)}&format=json"
                 req2 = urllib.request.Request(url2, headers={'User-Agent': 'DigBrainBot/1.0'})
                 with urllib.request.urlopen(req2, timeout=10) as response2:
@@ -65,79 +58,55 @@ class WikipediaSearch:
                         "url": f"https://zh.wikipedia.org/wiki/{urllib.parse.quote(title)}"
                     }
             
-            return {"success": False, "error": f"未找到 '{query}' 相关内容"}
+            return {"success": False, "error": f"未找到 '{query}'"}
             
         except Exception as e:
-            logger.error(f"维基搜索错误: {e}")
-            return {"success": False, "error": f"搜索出错: {str(e)}"}
+            return {"success": False, "error": str(e)}
 
 
 class WebSearch:
-    """网页搜索 - 使用SerpAPI风格"""
+    """网页搜索"""
     
-    # 知识库（本地缓存）
     KNOWLEDGE_BASE = {
-        "python": "Python是一种高级编程语言，由Guido van Rossum于1991年创建。它以简洁、易读的语法著称，广泛应用于Web开发、数据科学、人工智能等领域。",
-        "人工智能": "人工智能(AI)是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。包括机器学习、深度学习、自然语言处理等子领域。",
-        "机器学习": "机器学习是人工智能的核心技术，通过算法让计算机从数据中学习模式，无需显式编程。主要类型包括监督学习、无监督学习和强化学习。",
-        "深度学习": "深度学习是机器学习的子集，使用多层神经网络处理复杂模式。在图像识别、语音处理、自然语言理解等领域取得突破性进展。",
-        "神经网络": "神经网络是受生物神经系统启发的计算模型，由相互连接的节点（神经元）组成。深度神经网络是现代AI的核心技术。",
-        "transformer": "Transformer是一种神经网络架构，由Google在2017年提出。它使用自注意力机制处理序列数据，是GPT、BERT等模型的基础。",
-        "gpt": "GPT(Generative Pre-trained Transformer)是OpenAI开发的大型语言模型系列。GPT-4是最新版本，具有强大的自然语言理解和生成能力。",
-        "chatgpt": "ChatGPT是OpenAI开发的对话AI系统，基于GPT架构。它可以进行自然对话、回答问题、协助写作等多种任务。",
-        "区块链": "区块链是一种分布式账本技术，通过密码学保证数据不可篡改。比特币和以太坊是其最著名的应用。",
-        "量子计算": "量子计算利用量子力学原理进行计算，使用量子比特(qubit)而非传统比特。在特定问题上可能实现指数级加速。",
+        "python": "Python是一种高级编程语言，由Guido van Rossum于1991年创建。简洁易读，广泛用于Web开发、数据科学、AI等领域。",
+        "人工智能": "人工智能(AI)是计算机科学分支，创建能执行人类智能任务的系统。包括机器学习、深度学习、NLP等。",
+        "机器学习": "机器学习是AI核心技术，让计算机从数据中学习模式。包括监督学习、无监督学习、强化学习。",
+        "深度学习": "深度学习使用多层神经网络处理复杂模式，在图像识别、语音处理、NLP领域突破显著。",
+        "神经网络": "神经网络是受生物神经系统启发的计算模型，是现代AI的核心技术。",
+        "transformer": "Transformer是2017年Google提出的神经网络架构，使用自注意力机制，是GPT、BERT的基础。",
+        "gpt": "GPT是OpenAI的大型语言模型系列，GPT-4是最新版本，具有强大的语言理解和生成能力。",
+        "chatgpt": "ChatGPT是OpenAI的对话AI系统，可进行自然对话、回答问题、协助写作。",
     }
     
-    async def search(self, query: str) -> List[dict]:
-        """搜索 - 优先本地知识库，然后尝试在线搜索"""
+    async def search(self, query: str):
         results = []
         query_lower = query.lower()
         
-        # 检查本地知识库
         for keyword, content in self.KNOWLEDGE_BASE.items():
             if keyword in query_lower:
-                results.append({
-                    "title": f"📚 {keyword}",
-                    "snippet": content,
-                    "url": "",
-                    "source": "知识库"
-                })
+                results.append({"title": f"📚 {keyword}", "snippet": content, "source": "知识库"})
         
-        # 尝试在线搜索
         try:
             import urllib.request
-            
-            # 使用Wikipedia搜索作为补充
-            url = f"https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=3"
-            
+            url = f"https://zh.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=2"
             req = urllib.request.Request(url, headers={'User-Agent': 'DigBrainBot/1.0'})
             with urllib.request.urlopen(req, timeout=8) as response:
                 data = json.loads(response.read().decode())
             
-            for item in data.get('query', {}).get('search', [])[:2]:
+            for item in data.get('query', {}).get('search', []):
                 results.append({
                     "title": f"📖 {item['title']}",
                     "snippet": item.get('snippet', '').replace('<span class="searchmatch">', '').replace('</span>', ''),
-                    "url": f"https://zh.wikipedia.org/wiki/{urllib.parse.quote(item['title'])}",
                     "source": "维基百科"
                 })
-        except Exception as e:
-            logger.warning(f"在线搜索失败: {e}")
+        except:
+            pass
         
-        if not results:
-            results.append({
-                "title": "💡 提示",
-                "snippet": f"未找到 '{query}' 的相关信息，请尝试其他关键词或直接提问。",
-                "url": "",
-                "source": "系统"
-            })
-        
-        return results
+        return results if results else [{"title": "💡 提示", "snippet": f"未找到 '{query}' 相关信息", "source": "系统"}]
 
 
 class DigBrainBot:
-    """DigBrain Telegram Bot"""
+    """DigBrain Bot - 流式输出版"""
     
     def __init__(self, model_path: str = "./models/qwen"):
         self.model_path = model_path
@@ -145,79 +114,74 @@ class DigBrainBot:
         self.tokenizer = None
         self.torch = None
         self.ready = False
-        
         self.wiki = WikipediaSearch()
         self.web_search = WebSearch()
         self.conversation_history = {}
         
     async def initialize(self):
-        """初始化模型"""
         logger.info("正在加载模型...")
-        
         from transformers import AutoModelForCausalLM, AutoTokenizer
         import torch
         
         self.torch = torch
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_path,
-            torch_dtype=torch.float32
-        )
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_path, torch_dtype=torch.float32)
         self.model.eval()
-        
         self.ready = True
         logger.info("模型加载完成！")
     
     def _detect_intent(self, message: str) -> dict:
-        """检测用户意图"""
         message_lower = message.lower()
         
-        # 维基百科关键词
-        wiki_keywords = ["什么是", "是谁", "介绍", "解释", "什么是", "什么叫"]
-        
-        # 搜索关键词
-        search_keywords = ["搜索", "查找", "查询", "帮我找", "帮我搜"]
+        wiki_keywords = ["什么是", "是谁", "介绍", "解释"]
+        search_keywords = ["搜索", "查找", "查询", "帮我找"]
         
         for kw in wiki_keywords:
             if kw in message:
-                query = message.replace(kw, "").strip()
-                return {"type": "wiki", "query": query}
+                return {"type": "wiki", "query": message.replace(kw, "").strip()}
         
         for kw in search_keywords:
             if kw in message:
-                query = message.replace(kw, "").strip()
-                return {"type": "search", "query": query}
+                return {"type": "search", "query": message.replace(kw, "").strip()}
         
         return {"type": "chat", "query": message}
     
-    async def generate_response(self, prompt: str, user_id: int = 0) -> str:
-        """生成回复"""
+    async def generate_streaming(self, prompt: str, user_id: int, chat_id: int, bot):
+        """流式生成回复 - 实时更新消息"""
         if not self.ready:
-            return "⏳ 模型正在加载中，请稍后再试..."
+            return "⏳ 模型加载中..."
         
         try:
             intent = self._detect_intent(prompt)
             
-            # 维基百科搜索
+            # 维基搜索
             if intent["type"] == "wiki":
-                wiki_result = await self.wiki.search(intent["query"])
-                if wiki_result["success"]:
-                    response = f"📚 **{wiki_result['title']}**\n\n"
-                    response += wiki_result["extract"]
-                    if wiki_result["url"]:
-                        response += f"\n\n🔗 [查看详情]({wiki_result['url']})"
-                    return response
+                status_msg = await bot.send_message(chat_id, "🔍 正在搜索维基百科...")
+                result = await self.wiki.search(intent["query"])
+                
+                if result["success"]:
+                    response = f"📚 **{result['title']}**\n\n{result['extract']}"
+                    if result["url"]:
+                        response += f"\n\n🔗 [查看详情]({result['url']})"
+                else:
+                    response = f"❌ {result['error']}"
+                
+                await status_msg.edit_text(response, parse_mode='Markdown')
+                return response
             
             # 网页搜索
             elif intent["type"] == "search":
+                status_msg = await bot.send_message(chat_id, "🔍 正在搜索...")
                 results = await self.web_search.search(intent["query"])
+                
                 response = f"🔍 **搜索: {intent['query']}**\n\n"
                 for i, r in enumerate(results[:3], 1):
-                    response += f"{i}. {r['title']}\n"
-                    response += f"   {r['snippet'][:150]}\n\n"
+                    response += f"{i}. {r['title']}\n   {r['snippet'][:150]}\n\n"
+                
+                await status_msg.edit_text(response, parse_mode='Markdown')
                 return response
             
-            # 普通对话
+            # 流式对话
             history = self.conversation_history.get(user_id, [])
             context = ""
             if history:
@@ -226,34 +190,80 @@ class DigBrainBot:
             
             full_prompt = f"{context}用户: {prompt}\n\n助手: "
             
+            # 发送初始消息
+            status_msg = await bot.send_message(chat_id, "🧠 正在思考...")
+            
             inputs = self.tokenizer(full_prompt, return_tensors='pt')
             
+            # 流式生成
+            generated_text = ""
+            chunk_size = 15  # 每次生成的token数
+            max_tokens = 250
+            total_generated = 0
+            last_update_time = 0
+            
             with self.torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=300,
-                    do_sample=True,
-                    temperature=0.7,
-                    top_p=0.9,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
+                current_input = inputs
+                
+                while total_generated < max_tokens:
+                    outputs = self.model.generate(
+                        **current_input,
+                        max_new_tokens=chunk_size,
+                        do_sample=True,
+                        temperature=0.7,
+                        top_p=0.9,
+                        pad_token_id=self.tokenizer.eos_token_id,
+                        return_dict_in_generate=True
+                    )
+                    
+                    new_tokens = outputs.sequences[0][current_input['input_ids'].shape[1]:]
+                    if len(new_tokens) == 0:
+                        break
+                    
+                    new_text = self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+                    generated_text += new_text
+                    total_generated += len(new_tokens)
+                    
+                    # 更新消息（限制频率）
+                    current_time = datetime.now().timestamp()
+                    if current_time - last_update_time > 0.5:  # 每0.5秒更新一次
+                        try:
+                            display_text = generated_text[:4000]
+                            if len(display_text) > 50:
+                                await status_msg.edit_text(display_text + "▌")
+                        except:
+                            pass
+                        last_update_time = current_time
+                    
+                    # 检查是否结束
+                    if outputs.sequences[0][-1].item() == self.tokenizer.eos_token_id:
+                        break
+                    
+                    # 更新输入
+                    current_input = {'input_ids': outputs.sequences}
+                    
+                    # 小延迟模拟思考过程
+                    await asyncio.sleep(0.1)
             
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            if "助手: " in response:
-                response = response.split("助手: ")[-1]
+            # 最终消息
+            final_text = generated_text.strip()
+            if len(final_text) > 50:
+                await status_msg.edit_text(final_text[:4000])
+            else:
+                await status_msg.delete()
+                await bot.send_message(chat_id, final_text[:4000])
             
             # 保存历史
             if user_id not in self.conversation_history:
                 self.conversation_history[user_id] = []
-            self.conversation_history[user_id].append({"user": prompt, "bot": response})
+            self.conversation_history[user_id].append({"user": prompt, "bot": final_text})
             if len(self.conversation_history[user_id]) > 10:
                 self.conversation_history[user_id] = self.conversation_history[user_id][-10:]
             
-            return response.strip()
+            return final_text
             
         except Exception as e:
-            logger.error(f"生成回复错误: {e}")
+            logger.error(f"生成错误: {e}")
             return f"❌ 错误: {str(e)}"
     
     def clear_history(self, user_id: int):
@@ -265,114 +275,91 @@ brain_bot = DigBrainBot()
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 /start"""
     msg = """
-🧠 *DigBrain Bot - 类脑智能助手*
+🧠 *DigBrain Bot - 流式输出版*
 
-✨ *功能列表*：
+✨ *特色功能*：
+• 🌊 实时流式输出
 • 📚 维基百科搜索
-• 🔍 网页搜索  
+• 🔍 网页搜索
 • 💬 智能对话
-• 🔢 数学计算
 
-📝 *使用方法*：
-• "什么是人工智能" → 维基搜索
-• "搜索Python教程" → 网页搜索
-• 直接发消息 → 智能对话
-
-🔧 *命令*：
+📝 *命令*：
 /help - 帮助
 /status - 状态
 /clear - 清除历史
 /wiki [词] - 维基搜索
 /search [词] - 网页搜索
-/glm [内容] - 与开发者对话
+/glm [内容] - 联系开发者
 
-开始使用吧！
+现在发送消息，看看流式输出效果！
 """
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 
 async def glm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/glm 命令 - 与开发者对话"""
     if not context.args:
-        await update.message.reply_text("用法: /glm [你想对开发者说的话]\n示例: /glm 请帮我优化搜索功能")
+        await update.message.reply_text("用法: /glm [您想说的话]")
         return
     
     message = " ".join(context.args)
     user_name = update.effective_user.first_name or "用户"
-    
-    # 转发到管理员（这里需要设置ADMIN_CHAT_ID）
-    logger.info(f"[GLM] {user_name}: {message}")
+    logger.info(f"[GLM消息] {user_name}: {message}")
     
     await update.message.reply_text(
-        f"✅ 已收到您的消息，开发者会尽快回复！\n\n"
-        f"📝 您说: {message}\n\n"
-        f"💡 提示: 开发者正在监控Bot日志，会根据您的反馈进行优化。"
+        f"✅ 已收到您的消息！\n\n"
+        f"📝 内容: {message}\n\n"
+        f"开发者正在监控日志，会尽快回复。"
     )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 /help"""
-    help_text = """
-📚 *DigBrain Bot 帮助*
+    await update.message.reply_text("""
+📚 *帮助*
 
-*命令列表*：
-/start - 开始对话
-/help - 显示帮助
-/status - 系统状态
+*命令*：
+/start - 开始
+/help - 帮助
+/status - 状态
 /clear - 清除历史
-/wiki [关键词] - 维基搜索
-/search [关键词] - 网页搜索
-/glm [内容] - 与开发者对话
+/wiki [词] - 维基搜索
+/search [词] - 网页搜索
+/glm [内容] - 联系开发者
 
 *智能识别*：
-• "什么是XXX" → 维基百科
-• "搜索XXX" → 网页搜索
-• "计算 X+Y" → 数学计算
-
-*示例*：
-• 什么是人工智能
-• 搜索Python教程
-• 计算 123+456
-• 你好，介绍一下自己
-"""
-    await update.message.reply_text(help_text, parse_mode='Markdown')
+• "什么是XXX" → 维基
+• "搜索XXX" → 网页
+• 直接发消息 → 流式对话
+""", parse_mode='Markdown')
 
 
 async def wiki_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 /wiki"""
     if not context.args:
-        await update.message.reply_text("用法: /wiki [关键词]\n示例: /wiki 人工智能")
+        await update.message.reply_text("用法: /wiki [关键词]")
         return
     
     query = " ".join(context.args)
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    
     result = await brain_bot.wiki.search(query)
     
     if result["success"]:
         response = f"📚 **{result['title']}**\n\n{result['extract']}"
         if result["url"]:
-            response += f"\n\n🔗 [查看详情]({result['url']})"
+            response += f"\n\n🔗 [详情]({result['url']})"
     else:
-        response = f"❌ {result.get('error', '搜索失败')}"
+        response = f"❌ {result['error']}"
     
     await update.message.reply_text(response, parse_mode='Markdown')
 
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 /search"""
     if not context.args:
-        await update.message.reply_text("用法: /search [关键词]\n示例: /search Python教程")
+        await update.message.reply_text("用法: /search [关键词]")
         return
     
     query = " ".join(context.args)
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    
     results = await brain_bot.web_search.search(query)
     
-    response = f"🔍 **搜索: {query}**\n\n"
+    response = f"🔍 **{query}**\n\n"
     for i, r in enumerate(results[:3], 1):
         response += f"{i}. {r['title']}\n   {r['snippet'][:150]}\n\n"
     
@@ -380,69 +367,49 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 /status"""
-    status_text = f"""
-📊 *系统状态*
+    await update.message.reply_text(f"""
+📊 *状态*
 
 • 模型: Qwen2.5-0.5B
 • 状态: {'✅ 就绪' if brain_bot.ready else '⏳ 加载中'}
+• 流式输出: ✅ 启用
 • 维基搜索: ✅ 启用
 • 网页搜索: ✅ 启用
-• 对话记忆: ✅ 启用
-
-*能力评分*：
-• 数学: 100%
-• 英文: 100%
-• 编程: 100%
-• 中文: 30%
-"""
-    await update.message.reply_text(status_text, parse_mode='Markdown')
+""", parse_mode='Markdown')
 
 
 async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理 /clear"""
-    user_id = update.effective_user.id
-    brain_bot.clear_history(user_id)
-    await update.message.reply_text("🗑️ 对话历史已清除！")
+    brain_bot.clear_history(update.effective_user.id)
+    await update.message.reply_text("🗑️ 已清除")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """处理消息"""
     if not update.message or not update.message.text:
         return
     
     user_message = update.message.text
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name or "用户"
+    chat_id = update.effective_chat.id
     
-    logger.info(f"消息 [{user_name}]: {user_message[:80]}...")
+    logger.info(f"消息 [{user_name}]: {user_message[:60]}...")
     
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    
-    response = await brain_bot.generate_response(user_message, user_id)
-    
-    max_length = 4000
-    if len(response) > max_length:
-        for i in range(0, len(response), max_length):
-            await update.message.reply_text(response[i:i+max_length], parse_mode='Markdown')
-    else:
-        await update.message.reply_text(response, parse_mode='Markdown')
+    # 流式生成
+    await brain_bot.generate_streaming(
+        user_message, user_id, chat_id, context.bot
+    )
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """错误处理"""
     logger.error(f"Error: {context.error}")
-    if update and update.message:
-        await update.message.reply_text("❌ 发生错误，请稍后重试。")
 
 
 async def post_init(application: Application):
-    """初始化"""
     commands = [
-        BotCommand("start", "开始对话"),
+        BotCommand("start", "开始"),
         BotCommand("help", "帮助"),
         BotCommand("status", "状态"),
-        BotCommand("clear", "清除历史"),
+        BotCommand("clear", "清除"),
         BotCommand("wiki", "维基搜索"),
         BotCommand("search", "网页搜索"),
         BotCommand("glm", "联系开发者"),
@@ -452,20 +419,9 @@ async def post_init(application: Application):
     logger.info("Bot初始化完成！")
 
 
-async def notify_admin(bot, message: str):
-    """通知管理员"""
-    global ADMIN_CHAT_ID
-    if ADMIN_CHAT_ID:
-        try:
-            await bot.send_message(chat_id=ADMIN_CHAT_ID, text=message)
-        except Exception as e:
-            logger.error(f"通知管理员失败: {e}")
-
-
 def main():
-    """主函数"""
     logger.info("="*50)
-    logger.info("  DigBrain Telegram Bot 启动中...")
+    logger.info("  DigBrain Bot - 流式输出版")
     logger.info("="*50)
     
     application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
@@ -480,7 +436,7 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_error_handler(error_handler)
     
-    logger.info("Bot启动完成，等待消息...")
+    logger.info("Bot启动，等待消息...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
